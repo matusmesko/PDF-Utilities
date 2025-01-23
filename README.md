@@ -4,6 +4,10 @@
 
 The **PDF Utilities** is a simple Java Swing-based GUI tool that allows users to compress PDF files. It provides a user-friendly interface with theme switching, file selection, and progress tracking.
 
+<p align="center">
+    <img src="https://i.imgur.com/VP85K8m.png" alt="preview">
+</p>
+
 ---
 
 ## Features

@@ -78,7 +78,7 @@ public class App {
         compressButton.setAlignmentX(Component.CENTER_ALIGNMENT);
         compressButton.setEnabled(false);
 
-        JLabel fileLabel = new JLabel(l.getString("selectedfile") + l.getString("filenull"));
+        JLabel fileLabel = new JLabel(l.getString("selectedfile") + " " + l.getString("filenull"));
         fileLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
 
         JLabel statusLabel = new JLabel(" ");
