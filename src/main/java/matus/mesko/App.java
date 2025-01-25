@@ -5,16 +5,24 @@ import com.formdev.flatlaf.FlatLightLaf;
 import com.itextpdf.text.DocumentException;
 import com.itextpdf.text.pdf.PdfReader;
 import com.itextpdf.text.pdf.PdfStamper;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.printing.PDFPageable;
+import org.apache.pdfbox.rendering.ImageType;
+import org.apache.pdfbox.rendering.PDFRenderer;
 
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.image.BufferedImage;
+import java.awt.print.PrinterException;
+import java.awt.print.PrinterJob;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.URL;
+import java.util.ArrayList;
 import java.util.Locale;
 import java.util.Properties;
 
@@ -91,7 +99,12 @@ public class App {
         progressBar.setVisible(false);
         progressBar.setForeground(Color.GREEN);
 
-
+        JButton previewButton = new JButton(l.getString("previewButton"));
+        previewButton.setAlignmentX(Component.CENTER_ALIGNMENT);
+        previewButton.setEnabled(false);
+        JButton printButton = new JButton(l.getString("printButton"));
+        printButton.setAlignmentX(Component.CENTER_ALIGNMENT);
+        printButton.setEnabled(false);
 
         selectButton.addActionListener(new ActionListener() {
             @Override
@@ -105,9 +118,13 @@ public class App {
                     if (selectedFile.getName().toLowerCase().endsWith(".pdf")) {
                         fileLabel.setText(l.getString("selectedfile") + " " + filename);
                         compressButton.setEnabled(true);
+                        previewButton.setEnabled(true);
+                        printButton.setEnabled(true);
                     } else {
                         fileLabel.setText(l.getString("selectedfile") + " " + l.getString("filenull"));
                         compressButton.setEnabled(false);
+                        previewButton.setEnabled(false);
+                        printButton.setEnabled(false);
                         JOptionPane.showMessageDialog(frame, l.getString("errorfile"), l.getString("errorfiletitle"), JOptionPane.ERROR_MESSAGE);
                     }
                 }
@@ -151,6 +168,19 @@ public class App {
             }
         });
 
+        previewButton.addActionListener((ActionEvent e) -> {
+            if (selectedFile != null) {
+                showPdfPreviewFrame(selectedFile,l);
+            }
+        });
+
+        printButton.addActionListener((ActionEvent e) -> {
+            if (selectedFile != null) {
+                printPdf(selectedFile,l);
+            }
+        });
+
+
         panel.add(Box.createVerticalStrut(20));
         panel.add(titleLabel);
         panel.add(Box.createVerticalStrut(10));
@@ -166,6 +196,14 @@ public class App {
         panel.add(Box.createVerticalStrut(10));
         panel.add(statusLabel);
 
+        Box buttonBox = Box.createHorizontalBox();
+        buttonBox.add(previewButton);
+        buttonBox.add(Box.createHorizontalStrut(10));
+        buttonBox.add(printButton);
+        panel.add(Box.createVerticalStrut(10));
+        panel.add(buttonBox);
+        panel.add(Box.createVerticalStrut(10));
+
 
 
         frame.add(panel);
@@ -180,15 +218,78 @@ public class App {
         reader.close();
     }
 
+    private static void showPdfPreviewFrame(File file, LangManager l) {
+        JFrame previewFrame = new JFrame("PDF Preview");
+        previewFrame.setSize(800, 1000);
+        previewFrame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+
+        JLabel loadingLabel = new JLabel("Loading", SwingConstants.CENTER);
+        loadingLabel.setFont(new Font("Calibri", Font.BOLD, 24));
+        previewFrame.add(loadingLabel, BorderLayout.CENTER);
+
+        Timer timer = new Timer(500, new ActionListener() {
+            private int dotCount = 0;
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                dotCount = (dotCount + 1) % 4;
+                String dots = "";
+                for (int i = 0; i < dotCount; i++) {
+                    dots += ".";
+                }
+                loadingLabel.setText("Loading" + dots);
+            }
+        });
+        timer.start();
+
+        new Thread(() -> {
+            try (PDDocument document = PDDocument.load(file)) {
+                PDFRenderer renderer = new PDFRenderer(document);
+                JPanel previewPanel = new JPanel();
+                previewPanel.setLayout(new BoxLayout(previewPanel, BoxLayout.Y_AXIS));
+
+                for (int i = 0; i < document.getNumberOfPages(); i++) {
+                    BufferedImage image = renderer.renderImageWithDPI(i, 100, ImageType.RGB);
+                    JLabel pageLabel = new JLabel(new ImageIcon(image));
+                    previewPanel.add(pageLabel);
+                }
+
+                SwingUtilities.invokeLater(() -> {
+                    timer.stop();
+                    previewFrame.remove(loadingLabel);
+                    previewFrame.add(new JScrollPane(previewPanel), BorderLayout.CENTER);
+                    previewFrame.revalidate();
+                    previewFrame.repaint();
+                });
+            } catch (IOException e) {
+                JOptionPane.showMessageDialog(null, l.getString("failedpreview"), "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        }).start();
+
+        previewFrame.setVisible(true);
+    }
+
     private static String getSystemLanguage() {
         Locale locale = Locale.getDefault();
         String language = locale.getLanguage();
 
         if (language == null || language.isEmpty()) {
             System.err.println("Language detection failed, defaulting to English.");
-            return "en";  // Default language fallback
+            return "en";
         }
         return language;
+    }
+
+    private static void printPdf(File file, LangManager l) {
+        try (PDDocument document = PDDocument.load(file)) {
+            PrinterJob job = PrinterJob.getPrinterJob();
+            job.setPageable(new PDFPageable(document));
+            if (job.printDialog()) {
+                job.print();
+                JOptionPane.showMessageDialog(null, l.getString("successprint"), "Success", JOptionPane.INFORMATION_MESSAGE);
+            }
+        } catch (IOException | PrinterException e) {
+            JOptionPane.showMessageDialog(null, l.getString("failedprint"), "Error", JOptionPane.ERROR_MESSAGE);
+        }
     }
 
 }
