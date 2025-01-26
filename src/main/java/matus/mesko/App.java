@@ -3,9 +3,13 @@ package matus.mesko;
 import com.formdev.flatlaf.FlatDarkLaf;
 import com.formdev.flatlaf.FlatLightLaf;
 import com.itextpdf.text.DocumentException;
+import com.itextpdf.text.pdf.PdfDocument;
 import com.itextpdf.text.pdf.PdfReader;
 import com.itextpdf.text.pdf.PdfStamper;
+import com.itextpdf.text.pdf.PdfWriter;
 import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.encryption.AccessPermission;
+import org.apache.pdfbox.pdmodel.encryption.StandardProtectionPolicy;
 import org.apache.pdfbox.printing.PDFPageable;
 import org.apache.pdfbox.rendering.ImageType;
 import org.apache.pdfbox.rendering.PDFRenderer;
@@ -31,9 +35,15 @@ public class App {
 
 
     public static void main(String[] args) {
+        UserSettingsManager settingsManager = new UserSettingsManager();
         LangManager l = new LangManager(getSystemLanguage());
+        String savedTheme = settingsManager.getTheme();
         try {
-            UIManager.setLookAndFeel(new FlatDarkLaf());
+            if (savedTheme.equals("light")) {
+                UIManager.setLookAndFeel(new FlatLightLaf());
+            } else {
+                UIManager.setLookAndFeel(new FlatDarkLaf());
+            }
         } catch (Exception ex) {
             System.err.println("Failed to initialize FlatLaf");
         }
@@ -49,19 +59,24 @@ public class App {
 
         JMenuBar menuBar = new JMenuBar();
         JMenu optionsMenu = new JMenu(l.getString("options"));
-        JToggleButton themeToggle = new JToggleButton(l.getString("lightmode"));
+        JToggleButton themeToggle = new JToggleButton();
+        themeToggle.setText(savedTheme.equals("light") ? l.getString("darkmode") : l.getString("lightmode"));
+        themeToggle.setSelected(savedTheme.equals("light"));
+
         themeToggle.addActionListener(e -> {
             try {
                 if (themeToggle.isSelected()) {
                     UIManager.setLookAndFeel(new FlatLightLaf());
                     themeToggle.setText(l.getString("darkmode"));
+                    settingsManager.setTheme("light");
                 } else {
                     UIManager.setLookAndFeel(new FlatDarkLaf());
                     themeToggle.setText(l.getString("lightmode"));
+                    settingsManager.setTheme("dark");
                 }
                 SwingUtilities.updateComponentTreeUI(frame);
             } catch (Exception ex) {
-                System.err.println("Failed to switch theme");
+                System.err.println("Failed to switch theme: " + ex.getMessage());
             }
         });
         optionsMenu.add(themeToggle);
@@ -106,6 +121,10 @@ public class App {
         printButton.setAlignmentX(Component.CENTER_ALIGNMENT);
         printButton.setEnabled(false);
 
+        JButton lockButton = new JButton(l.getString("lockButton"));
+        lockButton.setAlignmentX(Component.CENTER_ALIGNMENT);
+        lockButton.setEnabled(false);
+
         selectButton.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -120,11 +139,13 @@ public class App {
                         compressButton.setEnabled(true);
                         previewButton.setEnabled(true);
                         printButton.setEnabled(true);
+                        lockButton.setEnabled(true);
                     } else {
                         fileLabel.setText(l.getString("selectedfile") + " " + l.getString("filenull"));
                         compressButton.setEnabled(false);
                         previewButton.setEnabled(false);
                         printButton.setEnabled(false);
+                        lockButton.setEnabled(false);
                         JOptionPane.showMessageDialog(frame, l.getString("errorfile"), l.getString("errorfiletitle"), JOptionPane.ERROR_MESSAGE);
                     }
                 }
@@ -159,11 +180,39 @@ public class App {
                             @Override
                             protected void done() {
                                 progressBar.setVisible(false);
-                                statusLabel.setText(l.getString("success") + " " + saveFile.getAbsolutePath());
+                                JOptionPane.showMessageDialog(frame, l.getString("success") + " " + saveFile.getAbsolutePath(), "Info", JOptionPane.INFORMATION_MESSAGE);
+
                             }
                         };
                         worker.execute();
                     }
+                }
+            }
+        });
+
+        lockButton.addActionListener(e -> {
+            if (selectedFile != null) {
+                String password = JOptionPane.showInputDialog(frame, l.getString("enterPassword"), l.getString("lockButton"), JOptionPane.PLAIN_MESSAGE);
+
+                if (password != null && !password.trim().isEmpty()) {
+                    // File dialog to save the locked file
+                    FileDialog saveDialog = new FileDialog(frame, l.getString("saveLockedFile"), FileDialog.SAVE);
+                    saveDialog.setFile(selectedFile.getName().replace(".pdf", "_locked.pdf"));
+                    saveDialog.setVisible(true);
+                    String saveDirectory = saveDialog.getDirectory();
+                    String saveFilename = saveDialog.getFile();
+
+                    if (saveDirectory != null && saveFilename != null) {
+                        File outputFile = new File(saveDirectory, saveFilename);
+                        try {
+                            pdfLock(selectedFile, outputFile, password, password);
+                            JOptionPane.showMessageDialog(frame, l.getString("successLock") + " " + outputFile.getAbsolutePath(), l.getString("lockButton"), JOptionPane.INFORMATION_MESSAGE);
+                        } catch (IOException ex) {
+                            JOptionPane.showMessageDialog(frame, l.getString("failedLock"), l.getString("lockButton"), JOptionPane.ERROR_MESSAGE);
+                        }
+                    }
+                } else {
+                    JOptionPane.showMessageDialog(frame, l.getString("invalidPassword"), l.getString("lockButton"), JOptionPane.WARNING_MESSAGE);
                 }
             }
         });
@@ -200,6 +249,8 @@ public class App {
         buttonBox.add(previewButton);
         buttonBox.add(Box.createHorizontalStrut(10));
         buttonBox.add(printButton);
+        buttonBox.add(Box.createHorizontalStrut(10));
+        buttonBox.add(lockButton);
         panel.add(Box.createVerticalStrut(10));
         panel.add(buttonBox);
         panel.add(Box.createVerticalStrut(10));
@@ -289,6 +340,22 @@ public class App {
             }
         } catch (IOException | PrinterException e) {
             JOptionPane.showMessageDialog(null, l.getString("failedprint"), "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+
+    private static void pdfLock(File inputFile, File outputFile, String ownerPassword, String userPassword) throws IOException {
+        try (PDDocument document = PDDocument.load(inputFile)) {
+            AccessPermission accessPermission = new AccessPermission();
+            StandardProtectionPolicy protectionPolicy =
+                    new StandardProtectionPolicy(ownerPassword, userPassword, accessPermission);
+            protectionPolicy.setEncryptionKeyLength(128);
+            protectionPolicy.setPermissions(accessPermission);
+            document.protect(protectionPolicy);
+
+            document.save(outputFile);
+        } catch (IOException e) {
+            throw new IOException("Failed to lock the PDF file.", e);
         }
     }
 
