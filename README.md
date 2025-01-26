@@ -5,7 +5,7 @@
 The **PDF Utilities** is a simple Java Swing-based GUI tool that allows users to compress PDF files. It provides a user-friendly interface with theme switching, file selection, and progress tracking.
 
 <p align="center">
-    <img src="https://i.imgur.com/VP85K8m.png" alt="preview">
+    <img src="https://i.imgur.com/54bwdUR.png" alt="preview">
 </p>
 
 ---
@@ -65,6 +65,7 @@ project-root/
 │   │   │   ├── matus/mesko/
 │   │   │   │   ├── App.java
 │   │   │   │   ├── LangManager.java
+│   │   │   │   ├── UserSettingsManager.java
 │   │   ├── resources/
 │   │   │   ├── messages_cs.properties
 │   │   │   ├── messages_de.properties
@@ -74,6 +75,7 @@ project-root/
 │   │   │   ├── messages_pl.properties
 │   │   │   ├── messages_sk.properties
 │   │   │   ├── pdf.png
+│   │   │   ├── usersettings.yaml
 ├── pom.xml
 └── README.md
 ```

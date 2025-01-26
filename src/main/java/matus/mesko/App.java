@@ -229,7 +229,6 @@ public class App {
             }
         });
 
-
         panel.add(Box.createVerticalStrut(20));
         panel.add(titleLabel);
         panel.add(Box.createVerticalStrut(10));
@@ -254,8 +253,6 @@ public class App {
         panel.add(Box.createVerticalStrut(10));
         panel.add(buttonBox);
         panel.add(Box.createVerticalStrut(10));
-
-
 
         frame.add(panel);
         frame.setVisible(true);
@@ -342,7 +339,6 @@ public class App {
             JOptionPane.showMessageDialog(null, l.getString("failedprint"), "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
-
 
     private static void pdfLock(File inputFile, File outputFile, String ownerPassword, String userPassword) throws IOException {
         try (PDDocument document = PDDocument.load(inputFile)) {

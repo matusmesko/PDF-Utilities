@@ -21,9 +21,6 @@ public class UserSettingsManager {
         loadSettings();
     }
 
-    /**
-     * Ensures that the writable settings file exists, creating it from resources if necessary.
-     */
     private void ensureWritableSettingsFile() {
         try {
             if (!Files.exists(WRITABLE_SETTINGS_PATH.getParent())) {
@@ -43,9 +40,6 @@ public class UserSettingsManager {
         }
     }
 
-    /**
-     * Loads the settings from the writable settings file.
-     */
     private void loadSettings() {
         try {
             settings = objectMapper.readValue(WRITABLE_SETTINGS_PATH.toFile(), Map.class);
@@ -54,9 +48,7 @@ public class UserSettingsManager {
         }
     }
 
-    /**
-     * Saves the updated settings to the writable settings file.
-     */
+
     public void saveSettings() {
         try {
             objectMapper.writeValue(WRITABLE_SETTINGS_PATH.toFile(), settings);
