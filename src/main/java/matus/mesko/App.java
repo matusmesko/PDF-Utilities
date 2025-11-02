@@ -13,6 +13,7 @@ import org.apache.pdfbox.pdmodel.encryption.StandardProtectionPolicy;
 import org.apache.pdfbox.printing.PDFPageable;
 import org.apache.pdfbox.rendering.ImageType;
 import org.apache.pdfbox.rendering.PDFRenderer;
+import org.apache.pdfbox.multipdf.PDFMergerUtility;
 
 import javax.swing.*;
 import java.awt.*;
@@ -125,6 +126,9 @@ public class App {
         lockButton.setAlignmentX(Component.CENTER_ALIGNMENT);
         lockButton.setEnabled(false);
 
+        JButton mergeButton = new JButton(l.getString("mergeButton"));
+        mergeButton.setAlignmentX(Component.CENTER_ALIGNMENT);
+
         selectButton.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -229,6 +233,10 @@ public class App {
             }
         });
 
+        mergeButton.addActionListener(e -> {
+            showMergeWindow(l);
+        });
+
         panel.add(Box.createVerticalStrut(20));
         panel.add(titleLabel);
         panel.add(Box.createVerticalStrut(10));
@@ -252,6 +260,8 @@ public class App {
         buttonBox.add(lockButton);
         panel.add(Box.createVerticalStrut(10));
         panel.add(buttonBox);
+        panel.add(Box.createVerticalStrut(10));
+        panel.add(mergeButton);
         panel.add(Box.createVerticalStrut(10));
 
         frame.add(panel);
@@ -352,6 +362,142 @@ public class App {
             document.save(outputFile);
         } catch (IOException e) {
             throw new IOException("Failed to lock the PDF file.", e);
+        }
+    }
+
+    private static void showMergeWindow(LangManager l) {
+        JFrame mergeFrame = new JFrame(l.getString("mergeButton"));
+        mergeFrame.setSize(600, 500);
+        mergeFrame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+
+        JPanel mainPanel = new JPanel();
+        mainPanel.setLayout(new BorderLayout(10, 10));
+        mainPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+
+        // List to store selected files
+        ArrayList<File> selectedFiles = new ArrayList<>();
+        DefaultListModel<String> listModel = new DefaultListModel<>();
+        JList<String> fileList = new JList<>(listModel);
+        JScrollPane scrollPane = new JScrollPane(fileList);
+
+        // Label showing number of files
+        JLabel fileCountLabel = new JLabel("0 " + l.getString("filesSelected"));
+        fileCountLabel.setHorizontalAlignment(SwingConstants.CENTER);
+
+        // Buttons panel
+        JPanel buttonPanel = new JPanel();
+        buttonPanel.setLayout(new BoxLayout(buttonPanel, BoxLayout.Y_AXIS));
+
+        JButton addFilesButton = new JButton(l.getString("addMoreFiles"));
+        addFilesButton.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+        JButton clearButton = new JButton(l.getString("clearList"));
+        clearButton.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+        JButton mergeButton = new JButton(l.getString("mergeFiles"));
+        mergeButton.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+        // Add files action
+        addFilesButton.addActionListener(e -> {
+            FileDialog fileDialog = new FileDialog(mergeFrame, l.getString("selectFilesToMerge"), FileDialog.LOAD);
+            fileDialog.setMultipleMode(true);
+            fileDialog.setVisible(true);
+            File[] files = fileDialog.getFiles();
+
+            if (files != null && files.length > 0) {
+                for (File file : files) {
+                    if (file.getName().toLowerCase().endsWith(".pdf")) {
+                        selectedFiles.add(file);
+                        listModel.addElement(file.getName());
+                    }
+                }
+                fileCountLabel.setText(selectedFiles.size() + " " + l.getString("filesSelected"));
+            }
+        });
+
+        // Clear list action
+        clearButton.addActionListener(e -> {
+            selectedFiles.clear();
+            listModel.clear();
+            fileCountLabel.setText("0 " + l.getString("filesSelected"));
+        });
+
+        // Merge action
+        mergeButton.addActionListener(e -> {
+            if (selectedFiles.isEmpty()) {
+                JOptionPane.showMessageDialog(mergeFrame, l.getString("noFilesSelected"),
+                    l.getString("mergeButton"), JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+
+            FileDialog saveDialog = new FileDialog(mergeFrame, l.getString("saveMergedFile"), FileDialog.SAVE);
+            saveDialog.setFile("merged.pdf");
+            saveDialog.setVisible(true);
+            String saveDirectory = saveDialog.getDirectory();
+            String saveFilename = saveDialog.getFile();
+
+            if (saveDirectory != null && saveFilename != null) {
+                File outputFile = new File(saveDirectory, saveFilename);
+
+                SwingWorker<Void, Void> worker = new SwingWorker<>() {
+                    @Override
+                    protected Void doInBackground() throws Exception {
+                        mergePdfs(selectedFiles, outputFile);
+                        return null;
+                    }
+
+                    @Override
+                    protected void done() {
+                        try {
+                            get();
+                            JOptionPane.showMessageDialog(mergeFrame,
+                                l.getString("mergeSuccess") + " " + outputFile.getAbsolutePath(),
+                                l.getString("mergeButton"), JOptionPane.INFORMATION_MESSAGE);
+                            mergeFrame.dispose();
+                        } catch (Exception ex) {
+                            ex.printStackTrace();
+                            String errorMsg = l.getString("mergeFailed");
+                            if (ex.getCause() != null) {
+                                errorMsg += "\n" + ex.getCause().getMessage();
+                            }
+                            JOptionPane.showMessageDialog(mergeFrame,
+                                errorMsg,
+                                l.getString("mergeButton"), JOptionPane.ERROR_MESSAGE);
+                        }
+                    }
+                };
+                worker.execute();
+            }
+        });
+
+        buttonPanel.add(Box.createVerticalStrut(10));
+        buttonPanel.add(addFilesButton);
+        buttonPanel.add(Box.createVerticalStrut(10));
+        buttonPanel.add(clearButton);
+        buttonPanel.add(Box.createVerticalStrut(10));
+        buttonPanel.add(mergeButton);
+        buttonPanel.add(Box.createVerticalStrut(10));
+
+        mainPanel.add(fileCountLabel, BorderLayout.NORTH);
+        mainPanel.add(scrollPane, BorderLayout.CENTER);
+        mainPanel.add(buttonPanel, BorderLayout.SOUTH);
+
+        mergeFrame.add(mainPanel);
+        mergeFrame.setVisible(true);
+    }
+
+    private static void mergePdfs(ArrayList<File> files, File outputFile) throws IOException {
+        try {
+            PDFMergerUtility pdfMerger = new PDFMergerUtility();
+            pdfMerger.setDestinationFileName(outputFile.getAbsolutePath());
+
+            for (File file : files) {
+                pdfMerger.addSource(file);
+            }
+
+            pdfMerger.mergeDocuments(null);
+        } catch (IOException e) {
+            throw new IOException("Failed to merge PDF files: " + e.getMessage(), e);
         }
     }
 
